@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionStatus {
+  PENDING     // request sent to Airtel, awaiting subscriber PIN entry / callback
+  SUCCESS     // confirmed successful (via callback or status query)
+  FAILED      // confirmed failed
+  TIMEOUT     // no resolution after max status-check attempts
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+
+  // Our own idempotent reference sent to Airtel (their "reference" + transaction.id)
+  reference      String            @unique
+  airtelTxnId    String            @unique @map("airtel_txn_id")
+
+  msisdn         String
+  amount         Decimal           @db.Decimal(12, 2)
+  currency       String            @default("KES")
+  country        String            @default("KE")
+
+  status         TransactionStatus @default(PENDING)
+  statusMessage  String?           @map("status_message")
+
+  // Raw payloads kept for audits / support disputes
+  requestPayload Json?             @map("request_payload")
+  initResponse   Json?             @map("init_response")
+  callbackPayload Json?            @map("callback_payload")
+  lastQueryResponse Json?          @map("last_query_response")
+
+  queryAttempts  Int               @default(0) @map("query_attempts")
+
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([msisdn])
+  @@map("transactions")
+}
